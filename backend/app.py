@@ -86,10 +86,7 @@ try:
 except Exception as e:
     print(f"WARNING: Without-DEXA model or scaler failed to load: {e}")
 
-# --- HEALTH CHECK ROUTE ---
-@app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({"status": "healthy"}), 200
+
 
 # --- AUTHENTICATION ROUTES ---
 @app.route('/auth/register', methods=['POST'])
