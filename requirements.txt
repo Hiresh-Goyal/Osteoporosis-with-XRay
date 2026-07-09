@@ -1,0 +1,21 @@
+Flask==3.0.3
+Flask-CORS==4.0.1
+sqlalchemy==2.0.30
+
+# ML Packages
+torch
+torchvision
+xgboost
+scikit-learn
+pandas
+numpy
+shap
+opencv-python
+grad-cam
+
+# PDF Generation
+fpdf
+joblib
+
+# Optional Database
+# psycopg2-binary==2.9.9
