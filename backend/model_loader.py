@@ -30,7 +30,8 @@ class ModelLoader:
     def _load_image_model(self):
         try:
             import onnxruntime as ort
-        except ImportError:
+        except ImportError as e:
+            self.warning_msg = f"ImportError: {str(e)}"
             print("WARNING: onnxruntime not installed. Falling back to synthetic inference.")
             self.is_demo = True
             return False
@@ -64,12 +65,18 @@ class ModelLoader:
             
         self.transform = preprocess
 
-        img_path = os.path.join(os.path.dirname(__file__), "../models/densenet121.onnx")
+        img_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models/densenet121.onnx"))
         if os.path.exists(img_path):
-            self.image_model = ort.InferenceSession(img_path, providers=['CPUExecutionProvider'])
-            print("Successfully Lazy-Loaded DenseNet121 ONNX model locally.")
-            return True
+            try:
+                self.image_model = ort.InferenceSession(img_path, providers=['CPUExecutionProvider'])
+                print("Successfully Lazy-Loaded DenseNet121 ONNX model locally.")
+                return True
+            except Exception as e:
+                self.warning_msg = f"ONNX Load Error: {str(e)}"
+                self.image_model = None
+                return False
         else:
+            self.warning_msg = f"File not found: {img_path}"
             print(f"CRITICAL WARNING: ONNX Model file not found at {img_path}")
             self.image_model = None
             return False
@@ -84,12 +91,14 @@ class ModelLoader:
 
     def predict_image(self, image_path):
         if self.is_demo:
-            return "Osteopenia", [0.1, 0.7, 0.2]
+            msg = getattr(self, 'warning_msg', 'Demo Mode')
+            return f"Fallback: {msg}", [0.1, 0.7, 0.2]
             
         if self.image_model is None:
             success = self._load_image_model()
             if not success:
-                return "Osteopenia", [0.1, 0.7, 0.2] # Fallback if loading fails
+                msg = getattr(self, 'warning_msg', 'Unknown Error')
+                return f"Fallback: {msg}", [0.1, 0.7, 0.2] # Fallback if loading fails
 
         try:
             import numpy as np
