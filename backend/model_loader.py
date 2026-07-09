@@ -29,40 +29,48 @@ class ModelLoader:
 
     def _load_image_model(self):
         try:
-            import torch
-            from torchvision import models, transforms
-            import torch.nn as nn
+            import onnxruntime as ort
         except ImportError:
-            print("WARNING: PyTorch not installed. Falling back to synthetic inference.")
+            print("WARNING: onnxruntime not installed. Falling back to synthetic inference.")
             self.is_demo = True
             return False
 
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
+        # Image preprocessing using PIL and numpy instead of torchvision
+        def preprocess(image_path):
+            from PIL import Image
+            import numpy as np
+            
+            img = Image.open(image_path).convert('RGB')
+            # Resize
+            img = img.resize((256, 256), Image.Resampling.BILINEAR)
+            # Center Crop
+            width, height = img.size
+            left = (width - 224)/2
+            top = (height - 224)/2
+            right = (width + 224)/2
+            bottom = (height + 224)/2
+            img = img.crop((left, top, right, bottom))
+            
+            # To Tensor (HWC to CHW) and normalize
+            img_array = np.array(img).astype(np.float32) / 255.0
+            img_array = np.transpose(img_array, (2, 0, 1))
+            
+            mean = np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
+            std = np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
+            img_array = (img_array - mean) / std
+            
+            # Add batch dimension
+            return np.expand_dims(img_array, axis=0).astype(np.float32)
+            
+        self.transform = preprocess
 
-        img_path = os.path.join(os.path.dirname(__file__), "../models/densenet121_best.pth")
+        img_path = os.path.join(os.path.dirname(__file__), "../models/densenet121.onnx")
         if os.path.exists(img_path):
-            self.image_model = models.densenet121()
-            num_ftrs = self.image_model.classifier.in_features
-            self.image_model.classifier = nn.Sequential(
-                nn.Dropout(0.5),
-                nn.Linear(num_ftrs, 256),
-                nn.ReLU(),
-                nn.Dropout(0.5),
-                nn.Linear(256, 3)
-            )
-            self.image_model.load_state_dict(torch.load(img_path, map_location=self.device))
-            self.image_model = self.image_model.to(self.device)
-            self.image_model.eval()
-            print("Successfully Lazy-Loaded DenseNet121 model locally.")
+            self.image_model = ort.InferenceSession(img_path, providers=['CPUExecutionProvider'])
+            print("Successfully Lazy-Loaded DenseNet121 ONNX model locally.")
             return True
         else:
-            print(f"CRITICAL WARNING: Model file not found at {img_path}")
+            print(f"CRITICAL WARNING: ONNX Model file not found at {img_path}")
             self.image_model = None
             return False
 
@@ -84,22 +92,25 @@ class ModelLoader:
                 return "Osteopenia", [0.1, 0.7, 0.2] # Fallback if loading fails
 
         try:
-            from PIL import Image
-            import torch
+            import numpy as np
             
-            image = Image.open(image_path).convert('RGB')
-            input_tensor = self.transform(image).unsqueeze(0).to(self.device)
+            # Preprocess
+            input_tensor = self.transform(image_path)
             
-            with torch.no_grad():
-                outputs = self.image_model(input_tensor)
-                probs = torch.nn.functional.softmax(outputs, dim=1)[0].cpu().numpy().tolist()
-                _, preds = torch.max(outputs, 1)
-                result = (self.classes[preds[0].item()], probs)
+            # ONNX Inference
+            input_name = self.image_model.get_inputs()[0].name
+            outputs = self.image_model.run(None, {input_name: input_tensor})[0]
+            
+            # Softmax
+            exp_preds = np.exp(outputs[0] - np.max(outputs[0]))
+            probs = (exp_preds / exp_preds.sum()).tolist()
+            
+            pred_idx = np.argmax(probs)
+            result = (self.classes[pred_idx], probs)
                 
             return result
         finally:
-            # AGGRESSIVE MEMORY MANAGEMENT FOR RENDER FREE TIER
-            print("Cleaning up PyTorch model to save RAM...")
+            # MEMORY MANAGEMENT
             del self.image_model
             self.image_model = None
             gc.collect()
