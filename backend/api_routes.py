@@ -116,22 +116,24 @@ def upload_xray():
     patient_id = request.form.get('patient_id')
     appointment_id = request.form.get('appointment_id')
     
-    if dl_model is None:
-        return jsonify({"status": "error", "message": "Deep Learning model is not loaded"}), 500
-        
     try:
-        image = Image.open(file.stream).convert('RGB')
-        input_tensor = img_transforms(image).unsqueeze(0) 
-        input_tensor = input_tensor.to(device)
+        from model_loader import ai_system
         
-        with torch.no_grad():
-            outputs = dl_model(input_tensor)
-            probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
+        # Save temp file for the loader
+        import tempfile
+        import os
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, file.filename)
+        file.save(temp_path)
+        
+        # Use our optimized lazy-loading PyTorch pipeline
+        result, probs = ai_system.predict_image(temp_path)
+        
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
             
-        confidence, predicted_idx = torch.max(probabilities, 0)
-        classes = ["Normal", "Osteopenia", "Osteoporosis"]
-        result = classes[predicted_idx.item()]
-        conf_percentage = round(confidence.item() * 100, 2)
+        conf_percentage = round(max(probs) * 100, 2)
         
         if appointment_id:
             appt = Appointment.query.get(appointment_id)
@@ -155,6 +157,8 @@ def upload_xray():
             "heatmap_generated": True 
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @api_bp.route('/doctor/prescribe', methods=['POST'])
