@@ -11,6 +11,14 @@ from models import (
 
 api_bp = Blueprint('api_bp', __name__)
 
+@api_bp.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        "status": "success",
+        "message": "OsteoVerse API is running smoothly",
+        "timestamp": datetime.utcnow().isoformat()
+    }), 200
+
 # --- 1. QUEUE & ONBOARDING (Smart Load Balancing) ---
 
 @api_bp.route('/doctors', methods=['GET'])
