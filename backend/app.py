@@ -13,8 +13,18 @@ import tempfile
 from models import db, User, PatientProfile, ClinicalRecord, Prediction, Appointment
 from api_routes import api_bp
 from model_loader import ai_system
+from datetime import datetime
 
 app = Flask(__name__, static_folder='../frontend/dist', static_url_path='/')
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        "status": "success",
+        "message": "OsteoVerse API is running smoothly",
+        "timestamp": datetime.utcnow().isoformat()
+    }), 200
+
 # Enable CORS, defaulting to all origins unless FRONTEND_URL is set in the environment
 frontend_url = os.environ.get('FRONTEND_URL', '*')
 allowed_origins = [frontend_url, 'http://localhost:5173', 'http://127.0.0.1:5173'] if frontend_url != '*' else '*'
