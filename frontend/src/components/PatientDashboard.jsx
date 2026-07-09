@@ -323,7 +323,7 @@ const PatientDashboard = () => {
                   <h3 className="text-lg font-bold text-amber-600 mb-1">Action Required</h3>
                   <p className="text-slate-700 mb-4">
                     Your assigned doctor has requested a 
-                    <strong className="text-slate-800"> DEXA Scan (Bone Density)</strong>.
+                    <strong className="text-slate-800"> {profile.doctor_request === 'DEXA' ? 'DEXA Scan (Bone Density)' : 'Chest X-Ray Scan'}</strong>.
                   </p>
                   <div className="bg-slate-100 p-4 rounded-lg text-sm text-slate-600">
                     Please visit the clinic to get this scan completed. Once completed, your doctor will upload and review the results.
